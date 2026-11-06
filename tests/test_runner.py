@@ -40,6 +40,37 @@ def test_parse_nmap_xml():
     assert "commonName=lab.example.test" in result.ports[3].scripts["ssl-cert"]
 
 
+def test_ipv6_target_adds_dash_6():
+    assert "-6" in runner.build_command("fd00::5")
+    assert "-6" not in runner.build_command("10.0.0.5")
+
+
+def test_no_ping_adds_pn():
+    assert "-Pn" in runner.build_command("10.0.0.5", no_ping=True)
+    assert "-Pn" not in runner.build_command("10.0.0.5")
+
+
+def test_unresolved_hostname_is_an_error_not_down():
+    xml = ('<?xml version="1.0"?><nmaprun><runstats>'
+           '<hosts up="0" down="0" total="0"/></runstats></nmaprun>')
+    result = runner.parse_nmap_xml(xml, "nope.invalid")
+    assert result.status == "error"
+    assert "resolved" in result.error
+
+
+def test_down_host_with_runstats_is_down():
+    xml = ('<?xml version="1.0"?><nmaprun><runstats>'
+           '<hosts up="0" down="1" total="1"/></runstats></nmaprun>')
+    assert runner.parse_nmap_xml(xml, "10.0.0.9").status == "down"
+
+
+def test_tunnel_attribute_is_parsed():
+    xml = ('<nmaprun><host><status state="up"/><ports><port protocol="tcp" portid="443">'
+           '<state state="open"/><service name="http" tunnel="ssl"/></port></ports></host></nmaprun>')
+    port = runner.parse_nmap_xml(xml, "10.0.0.5").ports[0]
+    assert port.service_label() == "ssl/http"
+
+
 def test_host_with_no_results_is_down():
     xml = '<?xml version="1.0"?><nmaprun></nmaprun>'
     assert runner.parse_nmap_xml(xml, "10.0.0.9").status == "down"

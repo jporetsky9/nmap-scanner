@@ -7,6 +7,7 @@ import shutil
 import sys
 
 from . import report
+from .findings import find_issues
 from .runner import PRESETS, scan_all, validate_ports, validate_scripts
 from .targets import ScopeError, check_scope, load_targets
 
@@ -29,6 +30,11 @@ def build_parser():
     parser.add_argument("--csv", metavar="FILE", help="write results to a CSV file")
     parser.add_argument("--json", metavar="FILE", help="write results to a JSON file")
     parser.add_argument("--show-all", action="store_true", help="include closed and filtered ports")
+    parser.add_argument(
+        "--no-ping",
+        action="store_true",
+        help="skip host discovery (nmap -Pn); use for hosts that block ping",
+    )
     parser.add_argument(
         "--authorized",
         action="store_true",
@@ -76,14 +82,18 @@ def main(argv=None):
         timeout=args.timeout,
         nmap_path=args.nmap_path,
         progress=_progress,
+        no_ping=args.no_ping,
     )
+    issues = find_issues(results)
 
     print(report.render_table(results, args.show_all))
     print()
     print(report.render_summary(results))
+    print()
+    print(report.render_findings(issues, results))
     if args.csv:
         report.write_csv(results, args.csv, args.show_all)
     if args.json:
-        report.write_json(results, args.json)
+        report.write_json(results, args.json, issues)
 
     return 1 if any(r.status == "error" for r in results) else 0

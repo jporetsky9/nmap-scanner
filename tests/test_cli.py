@@ -63,6 +63,16 @@ def test_missing_nmap_is_a_clear_error(monkeypatch, capsys):
     assert "nmap not found" in capsys.readouterr().err
 
 
+def test_no_ping_is_passed_through(fake_nmap):
+    cli.main(["192.168.1.10", "--no-ping"])
+    assert fake_nmap["no_ping"] is True
+
+
+def test_findings_section_is_printed(capsys):
+    cli.main(["192.168.1.10"])
+    assert "Findings" in capsys.readouterr().out
+
+
 def test_writes_output_files(tmp_path):
     csv_path, json_path = tmp_path / "r.csv", tmp_path / "r.json"
     assert cli.main(["192.168.1.10", "--csv", str(csv_path), "--json", str(json_path)]) == 0

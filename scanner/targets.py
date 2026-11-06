@@ -71,6 +71,10 @@ def in_default_scope(host):
         address = ipaddress.ip_address(host)
     except ValueError:
         return host in ALLOWED_PUBLIC_NAMES
+    # Judge an IPv4-mapped IPv6 address (::ffff:8.8.8.8) by the IPv4 address inside
+    # it. Some Python versions treat every mapped address as private.
+    if address.version == 6 and address.ipv4_mapped:
+        address = address.ipv4_mapped
     return address.is_private or address.is_loopback or address.is_link_local
 
 

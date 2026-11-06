@@ -72,5 +72,16 @@ def test_json_round_trip(tmp_path):
     path = tmp_path / "out.json"
     report.write_json(sample_results(), str(path))
     data = json.loads(path.read_text())
-    assert data[0]["host"] == "192.168.1.10"
-    assert data[0]["ports"][0]["service"] == "ssh"
+    assert data["hosts"][0]["host"] == "192.168.1.10"
+    assert data["hosts"][0]["ports"][0]["service"] == "ssh"
+    assert data["findings"] == []
+
+
+def test_tls_service_shows_as_ssl_prefixed():
+    port = PortResult(443, "tcp", "open", "http", "nginx", "", tunnel="ssl")
+    assert "ssl/http" in report.render_table([HostResult("10.0.0.5", "up", [port])])
+
+
+def test_summary_suggests_no_ping_when_hosts_are_down():
+    summary = report.render_summary([HostResult("10.0.0.2", "down")])
+    assert "--no-ping" in summary

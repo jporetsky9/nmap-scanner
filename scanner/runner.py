@@ -1,4 +1,5 @@
 """Run nmap against hosts in parallel and parse its XML output."""
+import ipaddress
 import re
 import subprocess
 import xml.etree.ElementTree as ET
@@ -30,6 +31,11 @@ class PortResult:
     product: str = ""
     version: str = ""
     scripts: dict = field(default_factory=dict)
+    tunnel: str = ""  # "ssl" when nmap detected TLS wrapping the service
+
+    def service_label(self):
+        """Service name as nmap prints it, e.g. "ssl/http" for HTTPS."""
+        return f"{self.tunnel}/{self.service}" if self.tunnel and self.service else self.service
 
     def version_string(self):
         return f"{self.product} {self.version}".strip()
@@ -55,9 +61,22 @@ def validate_scripts(scripts):
     return scripts
 
 
-def build_command(host, ports=None, scripts=None, nmap_path="nmap"):
+def _is_ipv6(host):
+    try:
+        return ipaddress.ip_address(host).version == 6
+    except ValueError:
+        return False
+
+
+def build_command(host, ports=None, scripts=None, nmap_path="nmap", no_ping=False):
     """Build the nmap argument list. It is passed as a list, never through a shell."""
     command = [nmap_path, "-sV", "-oX", "-"]
+    if _is_ipv6(host):
+        command.append("-6")  # nmap only scans IPv6 addresses with -6
+    if no_ping:
+        # Skip host discovery. Without root, nmap decides a host is up by trying
+        # ports 80 and 443, so a mail-only server would otherwise look "down".
+        command.append("-Pn")
     if ports:
         command += ["-p", validate_ports(ports)]
     if scripts:
@@ -71,6 +90,10 @@ def parse_nmap_xml(xml_text, target):
     root = ET.fromstring(xml_text)
     host_el = root.find("host")
     if host_el is None:
+        # nmap exits 0 when a hostname doesn't resolve; runstats then counts 0 hosts.
+        hosts_el = root.find("runstats/hosts")
+        if hosts_el is not None and hosts_el.get("total") == "0":
+            return HostResult(target, "error", error="target could not be resolved")
         return HostResult(target, "down")
 
     status_el = host_el.find("status")
@@ -89,6 +112,7 @@ def parse_nmap_xml(xml_text, target):
                 service=service.get("name", ""),
                 product=service.get("product", ""),
                 version=service.get("version", ""),
+                tunnel=service.get("tunnel", ""),
                 scripts={
                     s.get("id", ""): s.get("output", "").strip()
                     for s in port_el.findall("script")
@@ -98,9 +122,9 @@ def parse_nmap_xml(xml_text, target):
     return HostResult(target, status, ports)
 
 
-def run_scan(host, ports=None, scripts=None, timeout=300, nmap_path="nmap"):
+def run_scan(host, ports=None, scripts=None, timeout=300, nmap_path="nmap", no_ping=False):
     """Scan one host. Failures become an 'error' result instead of an exception."""
-    command = build_command(host, ports, scripts, nmap_path)
+    command = build_command(host, ports, scripts, nmap_path, no_ping)
     try:
         completed = subprocess.run(
             command, capture_output=True, text=True, timeout=timeout, check=False
@@ -121,12 +145,12 @@ def run_scan(host, ports=None, scripts=None, timeout=300, nmap_path="nmap"):
 
 
 def scan_all(hosts, threads=4, ports=None, scripts=None, timeout=300,
-             nmap_path="nmap", progress=None):
+             nmap_path="nmap", progress=None, no_ping=False):
     """Scan hosts concurrently (one nmap process per host); results keep input order."""
     results = {}
     with ThreadPoolExecutor(max_workers=threads) as pool:
         futures = {
-            pool.submit(run_scan, host, ports, scripts, timeout, nmap_path): host
+            pool.submit(run_scan, host, ports, scripts, timeout, nmap_path, no_ping): host
             for host in hosts
         }
         for done, future in enumerate(as_completed(futures), start=1):

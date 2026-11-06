@@ -13,6 +13,8 @@ import re
 from collections import Counter
 from dataclasses import asdict
 
+from . import findings as findings_mod
+
 _CONTROL_RE = re.compile(r"[\x00-\x1f\x7f]")
 _FORMULA_PREFIXES = ("=", "+", "-", "@", "\t", "\r")
 BAR_WIDTH = 30
@@ -44,7 +46,7 @@ def render_table(results, show_all=False):
                     host.host,
                     f"{port.port}/{port.protocol}",
                     port.state,
-                    port.service,
+                    port.service_label(),
                     port.version_string(),
                 )
             )
@@ -68,6 +70,8 @@ def render_summary(results):
     ]
     for result in errors:
         lines.append(f"  error on {printable(result.host)}: {printable(result.error)}")
+    if any(r.status == "down" for r in results):
+        lines.append("  Hosts that block ping can show as down; try --no-ping.")
 
     open_counts = Counter(
         f"{p.port}/{p.protocol}" for r in results for p in r.ports if p.state == "open"
@@ -83,6 +87,28 @@ def render_summary(results):
     return "\n".join(lines)
 
 
+def render_findings(findings, results):
+    """List findings, then compare how many scanned hosts each check affected."""
+    if not findings:
+        return "Findings: none from the checks that ran."
+    up_hosts = sum(1 for r in results if r.status == "up")
+    rows = [
+        (f.severity.upper(), printable(f.host), f.port, f.check, printable(f.detail))
+        for f in findings
+    ]
+    widths = [max(len(row[i]) for row in rows) for i in range(4)]
+    lines = [f"Findings ({len(findings)}):"]
+    for row in rows:
+        lines.append("  " + "  ".join(row[i].ljust(widths[i]) for i in range(4)) + "  " + row[4])
+
+    lines.append("")
+    lines.append(f"Hosts affected (of {up_hosts} up):")
+    per_check = findings_mod.hosts_per_check(findings)
+    for check in sorted(per_check, key=lambda c: -len(per_check[c])):
+        lines.append(f"  {check:<40} {len(per_check[check])}")
+    return "\n".join(lines)
+
+
 def write_csv(results, path, show_all=False):
     with open(path, "w", newline="", encoding="utf-8") as handle:
         writer = csv.writer(handle)
@@ -95,13 +121,17 @@ def write_csv(results, path, show_all=False):
                     port.port,
                     port.protocol,
                     csv_safe(port.state),
-                    csv_safe(port.service),
+                    csv_safe(port.service_label()),
                     csv_safe(port.version_string()),
                     csv_safe(" ".join(scripts.split())),
                 ]
             )
 
 
-def write_json(results, path):
+def write_json(results, path, findings=()):
+    data = {
+        "hosts": [asdict(result) for result in results],
+        "findings": [asdict(finding) for finding in findings],
+    }
     with open(path, "w", encoding="utf-8") as handle:
-        json.dump([asdict(result) for result in results], handle, indent=2)
+        json.dump(data, handle, indent=2)

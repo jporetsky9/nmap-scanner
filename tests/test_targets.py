@@ -54,3 +54,8 @@ def test_scope_check_blocks_public_targets_unless_authorized():
         check_scope(["192.168.0.1", "8.8.8.8"])
     check_scope(["192.168.0.1", "8.8.8.8"], authorized=True)
     check_scope(["192.168.0.1", "scanme.nmap.org"])
+
+
+def test_ipv4_mapped_ipv6_is_judged_by_its_ipv4_address():
+    assert in_default_scope("::ffff:192.168.1.10")
+    assert not in_default_scope("::ffff:8.8.8.8")
