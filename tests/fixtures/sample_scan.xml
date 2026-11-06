@@ -1,0 +1,27 @@
+<?xml version="1.0"?>
+<nmaprun scanner="nmap" args="nmap -sV -oX - 192.168.1.10" version="7.94">
+  <host>
+    <status state="up" reason="syn-ack"/>
+    <address addr="192.168.1.10" addrtype="ipv4"/>
+    <ports>
+      <port protocol="tcp" portid="22">
+        <state state="open" reason="syn-ack"/>
+        <service name="ssh" product="OpenSSH" version="8.9p1"/>
+      </port>
+      <port protocol="tcp" portid="25">
+        <state state="closed" reason="reset"/>
+        <service name="smtp"/>
+      </port>
+      <port protocol="tcp" portid="80">
+        <state state="open" reason="syn-ack"/>
+        <service name="http" product="nginx" version="1.18.0"/>
+        <script id="http-title" output="Welcome to nginx!"/>
+      </port>
+      <port protocol="tcp" portid="443">
+        <state state="open" reason="syn-ack"/>
+        <service name="https" product="nginx" version="1.18.0"/>
+        <script id="ssl-cert" output="Subject: commonName=lab.example.test&#10;Not valid after: 2027-01-01"/>
+      </port>
+    </ports>
+  </host>
+</nmaprun>
