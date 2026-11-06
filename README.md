@@ -5,7 +5,7 @@ hosts at once, uses the Nmap Scripting Engine (NSE) to check web and mail servic
 common TLS, HTTP, and mail misconfigurations, compares them across hosts, and writes CSV and
 JSON reports.
 
-Python 3.9+ (standard library only), nmap.
+Python 3.10+ (standard library only), nmap.
 
 > **Background.** During a security internship I built a Python scanner that used nmap and
 > NSE to assess exposed web and mail services. This repo is a clean rewrite with a focus on
@@ -154,7 +154,7 @@ pytest -q
 ```
 
 The tests mock `subprocess` and parse a saved nmap XML sample, so they run without nmap
-and without touching any network. GitHub Actions runs them on Python 3.9, 3.11, and 3.13
+and without touching any network. GitHub Actions runs them on Python 3.10, 3.12, and 3.13
 for every push (`.github/workflows/tests.yml`).
 
 ## Limitations and ideas
